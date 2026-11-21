@@ -1,41 +1,134 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// Kebun Ajaib — hand-in program.
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Runs on Node 22 (plain TS, stdlib only). Job: stage the entry for the
+// grader — copy the playable game and its screenshots into the output
+// directory, then write dossier.json through the kit's buildDossier so the
+// judge gets the standard summary of our source.
+//
+// Outside the grader container, MAKEFUN_OUTPUT_DIR replaces /output:
+//   rm -rf out && mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
+const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Caps the sealed scorer enforces on /output. We pre-check them here so a
+// bad state fails fast with a readable message instead of a gate refusal.
+const CAPS = {
+  screenshotMaxCount: 4,
+  screenshotMaxBytes: 262144, // 256 KiB per image
+  screenshotMinCount: 3,
+  gameMaxEntries: 993, // files + dirs under game/
+  gameMaxBytes: 50331648, // 48 MiB of game payload
+  gamePathMaxBytes: 1000, // longest UTF-8 path under game/
+};
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg']);
+
+function die(msg) {
+  console.error(`hand-in failed: ${msg}`);
+  process.exit(1);
+}
+
+// Count every file and directory below root, plus their combined size.
+function measureTree(root) {
+  let entries = 0;
+  let bytes = 0;
+  const walk = (dir, rel = '') => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      const relPath = rel ? `${rel}/${name}` : name;
+      entries += 1;
+      const relBytes = Buffer.byteLength(relPath, 'utf8');
+      if (relBytes > CAPS.gamePathMaxBytes) {
+        die(`game path too long (${relBytes} bytes): ${relPath}`);
+      }
+      const info = statSync(full);
+      if (info.isDirectory()) walk(full, relPath);
+      else bytes += info.size;
+    }
+  };
+  walk(root);
+  return { entries, bytes };
+}
+
+function stage() {
+  // The entry is meaningless without its front door — check it first.
+  const gameDir = join(repoDir, 'game');
+  if (!existsSync(join(gameDir, 'index.html'))) {
+    die('game/index.html is missing; nothing to hand in');
+  }
+
+  const shotsDir = join(repoDir, 'screenshots');
+  const shotFiles = existsSync(shotsDir)
+    ? readdirSync(shotsDir)
+        .filter((n) => IMAGE_EXT.has(extname(n).toLowerCase()))
+        .sort()
+    : [];
+  if (
+    shotFiles.length < CAPS.screenshotMinCount ||
+    shotFiles.length > CAPS.screenshotMaxCount
+  ) {
+    die(`expected 3-4 screenshots, found ${shotFiles.length}`);
+  }
+
+  // Copy the game tree, then the screenshots one by one so each image's
+  // size can be checked against the per-file cap as it lands.
+  mkdirSync(outDir, { recursive: true });
+  cpSync(gameDir, join(outDir, 'game'), { recursive: true });
+
+  mkdirSync(join(outDir, 'screenshots'), { recursive: true });
+  for (const name of shotFiles) {
+    const src = join(shotsDir, name);
+    const size = statSync(src).size;
+    if (size > CAPS.screenshotMaxBytes) {
+      die(`${name} is ${size} bytes, over the ${CAPS.screenshotMaxBytes} cap`);
+    }
+    copyFileSync(src, join(outDir, 'screenshots', name));
+  }
+
+  // Sanity-check what we just staged: the tree must fit the game caps.
+  const staged = measureTree(join(outDir, 'game'));
+  if (staged.entries > CAPS.gameMaxEntries) {
+    die(`game/ holds ${staged.entries} entries, cap is ${CAPS.gameMaxEntries}`);
+  }
+  if (staged.bytes > CAPS.gameMaxBytes) {
+    die(`game/ payload is ${staged.bytes} bytes, cap is ${CAPS.gameMaxBytes}`);
+  }
+
+  return { shotFiles, staged };
+}
+
+// Build the judge's dossier from the staged copy — same bytes the grader
+// will rebuild, so run it against outDir, never the repo copy.
+function writeDossier() {
+  const dossier = buildDossier(outDir, {
     text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
+    screenshots: { max: CAPS.screenshotMaxCount, max_bytes: CAPS.screenshotMaxBytes },
+    game_max_files: CAPS.gameMaxEntries,
+    game_max_bytes: CAPS.gameMaxBytes,
+    game_path_max_bytes: CAPS.gamePathMaxBytes,
+  });
+  writeFileSync(join(outDir, 'dossier.json'), dossier);
+}
+
+const { shotFiles, staged } = stage();
+writeDossier();
+
+console.log(
+  `hand-in ok: game/ ${staged.entries} entries ${(staged.bytes / 1048576).toFixed(2)} MiB, ` +
+    `screenshots ${shotFiles.length} (${shotFiles.join(', ')}), ` +
+    `dossier.json ${(statSync(join(outDir, 'dossier.json')).size / 1024).toFixed(1)} KiB -> ${outDir}`,
 );
