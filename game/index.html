@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kebun Ajaib — Temukan Perbedaan</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="hud" class="hidden">
+    <div id="hud-left">
+      <h1 id="hud-title">Kebun Ajaib</h1>
+      <span id="hud-level">Level 1</span>
+    </div>
+    <div id="hud-mid">
+      <span class="stat"><span class="label">Skor</span><span id="hud-score">0</span></span>
+      <span class="stat"><span class="label">Tersisa</span><span id="hud-remain">0</span></span>
+      <span class="stat"><span class="label">Waktu</span><span id="hud-time">120</span></span>
+      <span class="stat"><span class="label">Petunjuk</span><span id="hud-hints">3</span></span>
+    </div>
+    <div id="hud-right">
+      <button id="btn-hint" class="btn" title="Petunjuk (H)">💡 Petunjuk</button>
+      <button id="btn-restart" class="btn" title="Ulangi (R)">↻ Ulangi</button>
+      <button id="btn-mute" class="btn" title="Suara (M)">🔊 Suara</button>
+    </div>
+  </header>
+
+  <main id="stage" class="hidden">
+    <div id="panels">
+      <div class="panel" id="panel-left"><canvas id="canvas-left" width="760" height="560"></canvas></div>
+      <div class="panel" id="panel-right"><canvas id="canvas-right" width="760" height="560"></canvas></div>
+    </div>
+    <div id="toast" class="hidden"></div>
+  </main>
+
+  <section id="screen-start">
+    <div class="card">
+      <div id="logo-art"></div>
+      <h1 class="title">Kebun Ajaib</h1>
+      <p class="subtitle">Temukan 6 perbedaan di taman para peri — sebelum bulan terbenam!</p>
+      <ul class="howto">
+        <li>Dua gambar tampak sama, tapi 6 hal berbeda.</li>
+        <li>Klik perbedaan di salah satu gambar.</li>
+        <li>Klik salah −5 detik. Tombol <b>1–9</b> memilih level, <b>H</b> petunjuk, <b>R</b> ulangi, <b>M</b> suara.</li>
+      </ul>
+      <div id="level-picker">
+        <button class="btn level-btn" data-level="1">1 · Taman Senja</button>
+        <button class="btn level-btn" data-level="2">2 · Hutan Jamur</button>
+        <button class="btn level-btn" data-level="3">3 · Danau Peri</button>
+      </div>
+      <button id="btn-start" class="btn big">▶ Mulai Petualangan</button>
+    </div>
+  </section>
+
+  <section id="screen-end" class="hidden">
+    <div class="card">
+      <h1 class="title" id="end-title">Selesai!</h1>
+      <p class="subtitle" id="end-sub">Kamu menemukan semua perbedaan.</p>
+      <div id="end-stats">
+        <div class="endstat"><span class="label">Skor Akhir</span><span id="end-score">0</span></div>
+        <div class="endstat"><span class="label">Waktu</span><span id="end-time">0:00</span></div>
+        <div class="endstat"><span class="label">Petunjuk Dipakai</span><span id="end-hints">0</span></div>
+        <div class="endstat"><span class="label">Peringkat</span><span id="end-rank">★</span></div>
+      </div>
+      <div id="end-buttons">
+        <button id="btn-next" class="btn big">▶ Level Berikutnya</button>
+        <button id="btn-again" class="btn">↻ Main Lagi</button>
+        <button id="btn-home" class="btn">⌂ Menu</button>
+      </div>
+    </div>
+  </section>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
